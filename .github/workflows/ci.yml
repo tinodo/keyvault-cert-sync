@@ -1,0 +1,101 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: Tests (Windows PowerShell 5.1)
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build the self-contained extension script
+        shell: powershell
+        run: .\tools\Build-ExtensionScript.ps1
+
+      - name: Agent logic tests
+        shell: powershell
+        run: .\test\Test-SyncLogic.ps1
+
+      - name: Extension payload tests
+        shell: powershell
+        run: .\test\Test-ExtensionPayload.ps1
+
+      - name: Installer staging tests
+        shell: powershell
+        run: .\test\Test-InstallerStaging.ps1
+
+      - name: Upload the built artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: certsync-extension
+          path: dist/certsync-extension.ps1
+          if-no-files-found: error
+
+  analyse:
+    name: PSScriptAnalyzer
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install PSScriptAnalyzer
+        shell: powershell
+        run: Install-Module PSScriptAnalyzer -Force -Scope CurrentUser -ErrorAction Stop
+
+      - name: Analyse
+        shell: powershell
+        run: |
+          $results = Invoke-ScriptAnalyzer -Path . -Recurse -Severity Error,Warning `
+                       -ExcludeRule PSAvoidUsingWriteHost,PSUseShouldProcessForStateChangingFunctions,PSAvoidUsingPositionalParameters
+          if ($results) {
+            $results | Format-Table -AutoSize | Out-String -Width 200 | Write-Host
+            $errors = @($results | Where-Object Severity -eq 'Error')
+            if ($errors) { throw "PSScriptAnalyzer reported $($errors.Count) error(s)." }
+            Write-Host "$($results.Count) warning(s), no errors." -ForegroundColor Yellow
+          } else {
+            Write-Host 'Clean.' -ForegroundColor Green
+          }
+
+  secrets:
+    name: Secret and PII scan
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Scan for credentials and environment-identifying values
+        run: |
+          set -euo pipefail
+          fail=0
+
+          # Credential-shaped literals. The agent authenticates with managed identity and
+          # must never carry a secret, so any match here is a genuine problem.
+          if grep -rInE "(ConvertTo-SecureString\s+['\"][^'\"$]{8,}|password\s*=\s*['\"][^'\"$)]{4,}|client_secret\s*=\s*['\"][^'\"$]+)" \
+                 --include='*.ps1' --include='*.json' --include='*.md' --include='*.yml' . ; then
+            echo "::error::Credential-shaped literal found."
+            fail=1
+          fi
+
+          # Storage SAS tokens, which can leak via a pasted publish command.
+          if grep -rInE "[?&]s(i?g|v)=[A-Za-z0-9%+/=]{16,}" \
+                 --include='*.ps1' --include='*.json' --include='*.md' --include='*.yml' . ; then
+            echo "::error::Storage SAS token found."
+            fail=1
+          fi
+
+          # Private key blocks.
+          if grep -rIn -- "-----BEGIN .*PRIVATE KEY-----" . ; then
+            echo "::error::Private key material found."
+            fail=1
+          fi
+
+          exit $fail

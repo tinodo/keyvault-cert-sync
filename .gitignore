@@ -1,0 +1,28 @@
+# Build output - regenerate with tools\Build-ExtensionScript.ps1
+# This also covers the generated dist\probe-iis-plan.ps1 from Build-IisPlanProbe.ps1.
+# Do NOT add a bare probe-*.ps1 rule: gitignore matching is case-insensitive on Windows
+# and it would silently exclude tools\Probe-Iis.ps1.
+dist/
+
+# Local parameter files, which may carry SAS tokens
+*.params.json
+
+# Environment-specific scan patterns for tools\Test-NoSensitiveContent.ps1.
+# These deliberately contain the real values that must never be published, so they
+# must never themselves be committed.
+*scan-patterns*.psd1
+*.sensitive.psd1
+
+# PFX / key material must never be committed
+*.pfx
+*.p12
+*.key
+*.pem
+
+# Editor and OS noise
+.vs/
+.vscode/
+*.user
+Thumbs.db
+desktop.ini
+.DS_Store

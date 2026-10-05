@@ -1,0 +1,51 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "galleryName":     { "type": "string",  "defaultValue": "CONTOSO" },
+    "applicationName": { "type": "string",  "defaultValue": "certsync" },
+    "versionName":     { "type": "string" },
+    "mediaLink":       { "type": "string" },
+    "vaultName":       { "type": "string",  "defaultValue": "kv-contoso-certs" },
+    "certificateName": { "type": "string",  "defaultValue": "contoso-com" },
+    "location":        { "type": "string",  "defaultValue": "[resourceGroup().location]" }
+  },
+  "variables": {
+    "installCommand": "[concat('rename certsync certsync.ps1 & powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\\certsync.ps1 -VaultName ', parameters('vaultName'), ' -CertificateName ', parameters('certificateName'))]",
+    "removeCommand":  "powershell.exe -NoProfile -ExecutionPolicy Bypass -Command \"Unregister-ScheduledTask -TaskName 'KeyVault Certificate Sync' -TaskPath '\\Microsoft\\KeyVaultCertSync\\' -Confirm:$false -ErrorAction SilentlyContinue\""
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Compute/galleries/applications/versions",
+      "apiVersion": "2023-07-03",
+      "name": "[format('{0}/{1}/{2}', parameters('galleryName'), parameters('applicationName'), parameters('versionName'))]",
+      "location": "[parameters('location')]",
+      "tags": { "SecurityControl": "Ignore" },
+      "properties": {
+        "publishingProfile": {
+          "source": { "mediaLink": "[parameters('mediaLink')]" },
+          "manageActions": {
+            "install": "[variables('installCommand')]",
+            "update":  "[variables('installCommand')]",
+            "remove":  "[variables('removeCommand')]"
+          },
+          "enableHealthCheck": false,
+          "excludeFromLatest": false,
+          "replicaCount": 1,
+          "storageAccountType": "Standard_LRS",
+          "targetRegions": [
+            {
+              "name": "[parameters('location')]",
+              "regionalReplicaCount": 1,
+              "storageAccountType": "Standard_LRS"
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "outputs": {
+    "versionId":      { "type": "string", "value": "[resourceId('Microsoft.Compute/galleries/applications/versions', parameters('galleryName'), parameters('applicationName'), parameters('versionName'))]" },
+    "installCommand": { "type": "string", "value": "[variables('installCommand')]" }
+  }
+}
