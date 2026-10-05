@@ -156,7 +156,7 @@ fix, and never report success for work that did not happen.
 
 ## Testing
 
-82 tests across three suites, none requiring Azure, a federation server or elevation.
+91 tests across four suites, none requiring Azure, a federation server or elevation.
 
 `Test-SyncLogic.ps1` extracts functions from the agent through the **PowerShell AST** and dot-
 sources them individually, so real production code is exercised without running the script body

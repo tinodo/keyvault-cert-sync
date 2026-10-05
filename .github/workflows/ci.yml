@@ -31,6 +31,10 @@ jobs:
         shell: powershell
         run: .\test\Test-InstallerStaging.ps1
 
+      - name: Gallery template tests
+        shell: powershell
+        run: .\test\Test-GalleryTemplate.ps1
+
       - name: Upload the built artifact
         uses: actions/upload-artifact@v4
         with:

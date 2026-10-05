@@ -117,6 +117,25 @@ Verify afterwards:
 For fleet deployment via Azure Compute Gallery VM Applications or Run Command, see
 [docs/deployment.md](docs/deployment.md).
 
+### Deploying to a fleet
+
+For more than a couple of servers, publish the agent as an Azure Compute Gallery
+**VM Application** — versioned, declarative, and visible in the VM's own resource definition:
+
+```powershell
+.\tools\Publish-GalleryVersion.ps1 `
+    -Version 1.0.0 `
+    -ResourceGroup rg-gallery -GalleryName mygallery -StorageAccount mystorageacct `
+    -VaultName kv-contoso-certs -CertificateName contoso-com `
+    -AssignToVm 'rg-identity/ADFS01','rg-dmz/WAP01','rg-web/WEBSRV01'
+```
+
+That builds the artifact, uploads it, generates and verifies a read SAS, publishes the version
+through an ARM template, confirms it provisioned, and assigns it to the named VMs.
+
+See [docs/vm-application.md](docs/vm-application.md) for the full pipeline, permissions, and
+the non-obvious failure modes.
+
 ## Documentation
 
 | Document | Covers |
@@ -124,7 +143,8 @@ For fleet deployment via Azure Compute Gallery VM Applications or Run Command, s
 | [docs/installation.md](docs/installation.md) | Prerequisites, RBAC, managed identity selection, first install |
 | [docs/configuration.md](docs/configuration.md) | Every parameter, scheduling, logging, monitoring |
 | [docs/iis.md](docs/iis.md) | IIS binding scopes, SNI, Central Certificate Store, http.sys |
-| [docs/deployment.md](docs/deployment.md) | VM Applications, Run Command, the self-contained build |
+| [docs/vm-application.md](docs/vm-application.md) | **Compute Gallery VM Application deployment**, permissions, gotchas |
+| [docs/deployment.md](docs/deployment.md) | Direct install, Run Command, the self-contained build |
 | [docs/troubleshooting.md](docs/troubleshooting.md) | Failure modes and what they actually mean |
 | [docs/architecture.md](docs/architecture.md) | Design decisions and the reasoning behind them |
 
@@ -134,7 +154,7 @@ For fleet deployment via Azure Compute Gallery VM Applications or Run Command, s
 src/          The agent and its installer - what runs on the server
 extensions/   Template for building a single self-contained deployment script
 tools/        Build, probe and verification utilities (all read-only except the builder)
-test/         82 tests across three suites, no Azure or elevation required
+test/         91 tests across four suites, no Azure or elevation required
 azure/        ARM template for publishing a VM Application version
 docs/         Documentation
 ```
@@ -150,9 +170,10 @@ needing Azure, a federation server or elevation. They run on any Windows machine
 .\test\Test-SyncLogic.ps1          # 59 tests - agent logic
 .\test\Test-ExtensionPayload.ps1   # 14 tests - build integrity
 .\test\Test-InstallerStaging.ps1   #  9 tests - installer file handling
+.\test\Test-GalleryTemplate.ps1    #  9 tests - ARM template vs. the agent it deploys
 ```
 
-All three run in CI on every push — see [.github/workflows/ci.yml](.github/workflows/ci.yml).
+All four run in CI on every push — see [.github/workflows/ci.yml](.github/workflows/ci.yml).
 
 ## Contributing
 

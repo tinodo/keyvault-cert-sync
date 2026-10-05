@@ -24,12 +24,16 @@ First public release.
   so neither breaks on a non-English Windows.
 - **Self-contained build** (`tools\Build-ExtensionScript.ps1`) producing a single file for
   Run Command or VM Application deployment.
+- **VM Application publishing** — `tools\Publish-GalleryVersion.ps1` runs the whole pipeline
+  (build, preflight, upload, SAS, publish, verify, optionally assign) with validation at each
+  stage, backed by an ARM template that avoids the CLI's mangling of quoted manage-action
+  strings. Documented in [docs/vm-application.md](docs/vm-application.md).
 - **Read-only tooling** — `Verify-CertSync.ps1`, `Check-AgentVersion.ps1`, `Probe-Iis.ps1`, and
   `Build-IisPlanProbe.ps1`, which generates a dry-run planner reporting exactly which bindings
   would be re-pointed and which certificates removed, with a reason for each.
-- **ARM template** for publishing Compute Gallery VM Application versions, avoiding the CLI's
-  mangling of quoted manage-action strings.
-- **82 tests** across three suites, requiring neither Azure, a federation server nor elevation.
+- **Secret and PII scanner** (`tools\Test-NoSensitiveContent.ps1`) with generic built-in checks
+  and support for environment-specific patterns supplied from outside the repository.
+- **91 tests** across four suites, requiring neither Azure, a federation server nor elevation.
 
 ### Notes
 
