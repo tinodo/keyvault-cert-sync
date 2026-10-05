@@ -77,25 +77,55 @@ jobs:
           set -euo pipefail
           fail=0
 
+          # Exclude .git and the files that necessarily contain these patterns as literals:
+          # this workflow and the PowerShell scanner. Without that they match themselves and
+          # the job fails on every run, which trains everyone to ignore it.
+          common=(--binary-files=without-match
+                  --exclude-dir=.git
+                  --exclude=ci.yml
+                  --exclude=Test-NoSensitiveContent.ps1)
+
+          scan() {
+            # grep exits 1 when there are no matches, which is the result we want; only a
+            # match (exit 0) is a failure. Anything else is a real error worth surfacing.
+            local label="$1"; shift
+            local out
+            if out=$(grep -rInE "${common[@]}" "$@" . 2>/dev/null); then
+              echo "::error::${label}"
+              echo "$out"
+              return 1
+            fi
+            return 0
+          }
+
           # Credential-shaped literals. The agent authenticates with managed identity and
           # must never carry a secret, so any match here is a genuine problem.
-          if grep -rInE "(ConvertTo-SecureString\s+['\"][^'\"$]{8,}|password\s*=\s*['\"][^'\"$)]{4,}|client_secret\s*=\s*['\"][^'\"$]+)" \
-                 --include='*.ps1' --include='*.json' --include='*.md' --include='*.yml' . ; then
-            echo "::error::Credential-shaped literal found."
-            fail=1
-          fi
+          # Character classes avoid quoting both quote styles in one bracket expression,
+          # which silently truncates the class and makes the pattern never match.
+          q="['\"]"
+          notq="[^'\"]"
+          scan "Credential-shaped literal found." \
+            -e "ConvertTo-SecureString[[:space:]]+${q}${notq}{8,}" \
+            -e "(password|passwd|pwd)[[:space:]]*=[[:space:]]*${q}?${notq}{4,}" \
+            -e "client_secret[[:space:]]*=[[:space:]]*${q}?${notq}+" || fail=1
 
           # Storage SAS tokens, which can leak via a pasted publish command.
-          if grep -rInE "[?&]s(i?g|v)=[A-Za-z0-9%+/=]{16,}" \
-                 --include='*.ps1' --include='*.json' --include='*.md' --include='*.yml' . ; then
-            echo "::error::Storage SAS token found."
-            fail=1
-          fi
+          scan "Storage SAS token found." \
+            -e "[?&]s(ig|v)=[A-Za-z0-9%+/=]{16,}" || fail=1
 
-          # Private key blocks.
-          if grep -rIn -- "-----BEGIN .*PRIVATE KEY-----" . ; then
-            echo "::error::Private key material found."
-            fail=1
-          fi
+          # Bearer tokens and cloud access keys.
+          scan "Access token or key found." \
+            -e "\b(eyJ[A-Za-z0-9_-]{20,}|gh[pousr]_[A-Za-z0-9]{20,})" \
+            -e "\b(AKIA|ASIA)[0-9A-Z]{16}\b" || fail=1
 
+          # Private key blocks. Assembled at runtime so this line cannot match itself.
+          marker="-----BEGIN"
+          scan "Private key material found." \
+            -e "${marker} [A-Z ]*PRIVATE KEY-----" || fail=1
+
+          # Local profile paths, which identify the machine the work was done on.
+          scan "Local profile path found." \
+            -e "[A-Z]:\\\\Users\\\\[a-z0-9._-]+\\\\" || fail=1
+
+          if [ "$fail" -eq 0 ]; then echo "Clean."; fi
           exit $fail
